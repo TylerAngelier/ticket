@@ -2,8 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- Hierarchical `ls`/`list` view: tickets render as a tree (parents depend on
+  children), with fully-closed subtrees collapsed to one line, unmatched
+  parents shown as dimmed context under filters, cross/missing dependencies
+  on a second line, and dependency cycles reported inline (`⟲`) with a stderr
+  warning. `--flat` gives one-line-per-ticket output for scripts.
+- Compiled Go plugin binary (`ticket-ls`) backing `list`, `ready`, and
+  `blocked` commands; ~230x faster than the awk implementation at 5k tickets
+- Differential test harness (`scripts/differential-check.sh`) comparing Go
+  plugin output byte-for-byte against bash built-ins on generated fixtures
+- Performance regression gate (`scripts/bench.sh`)
+- Makefile targets: build, unit, behave, differential, bench, install
+
 ### Changed
-- Extracted `edit`, `ls`, `query`, and `migrate-beads` commands to plugins (ticket-extras)
+- Fork URLs repointed from wedow to TylerAngelier (publish scripts, PKGBUILDs,
+  README); tap/AUR targets overridable via TAP_REPO and SOURCE_REPO env vars
+- Extracted `edit`, `query`, and `migrate-beads` commands to plugins (ticket-extras)
 
 ### Added
 - Plugin system: executables named `tk-<cmd>` or `ticket-<cmd>` in PATH are invoked automatically
@@ -11,6 +26,9 @@
 - `TICKETS_DIR` and `TK_SCRIPT` environment variables exported for plugins
 - `help` command lists installed plugins with descriptions
 - Plugin metadata: `# tk-plugin:` comment for scripts, `--tk-describe` flag for binaries
+- Packaging of the Go binary is deferred: `pkg/extras.txt` still lists `ls`,
+  and Homebrew/AUR formulas need updating to build `cmd/ticket-ls` from source
+  (tracked for the follow-up packaging pass)
 - Multi-package distribution: `ticket-core`, `ticket-extras`, and individual plugin packages
 - CI scripts for publishing to Homebrew tap and AUR
 

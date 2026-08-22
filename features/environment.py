@@ -16,6 +16,11 @@ def before_all(context):
     if plugins_dir.exists():
         os.environ['PATH'] = str(plugins_dir) + ':' + os.environ.get('PATH', '')
 
+    # Add compiled plugin binaries so Go-backed commands are found
+    build_dir = context.project_dir / 'build'
+    if build_dir.exists():
+        os.environ['PATH'] = str(build_dir) + ':' + os.environ.get('PATH', '')
+
 
 def before_scenario(context, scenario):
     """Create a fresh temporary directory for each scenario."""

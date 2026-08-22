@@ -24,7 +24,7 @@ Feature: Ticket Listing
     Given a ticket exists with ID "list-0001" and title "My ticket"
     When I run "ticket ls"
     Then the command should succeed
-    And the output should match pattern "list-0001\s+\[open\]\s+-\s+My ticket"
+    And the output should match pattern "list-0001\s+\[P2\]\[open\]\s+My ticket"
 
   Scenario: List with status filter
     Given a ticket exists with ID "list-0001" and title "Open ticket"
@@ -35,13 +35,88 @@ Feature: Ticket Listing
     And the output should contain "list-0001"
     And the output should not contain "list-0002"
 
-  Scenario: List shows dependencies
-    Given a ticket exists with ID "list-0001" and title "Main ticket"
-    And a ticket exists with ID "list-0002" and title "Dep ticket"
-    And ticket "list-0001" depends on "list-0002"
+  Scenario: List nests children under parents
+    Given a ticket exists with ID "epi-0001" and title "Epic"
+    And a ticket exists with ID "sto-0002" and title "Story"
+    And ticket "sto-0002" depends on "epi-0001"
     When I run "ticket ls"
     Then the command should succeed
-    And the output should contain "<- [list-0002]"
+    And the output line 1 should contain "epi-0001"
+    And the output line 2 should contain "sto-0002"
+
+  Scenario: List collapses fully closed subtrees
+    Given a ticket exists with ID "epi-0001" and title "Epic"
+    And a ticket exists with ID "sto-0002" and title "Story"
+    And ticket "sto-0002" depends on "epi-0001"
+    And ticket "epi-0001" has status "closed"
+    And ticket "sto-0002" has status "closed"
+    When I run "ticket ls"
+    Then the command should succeed
+    And the output should contain "▸ epi-0001"
+    And the output should contain "· 2 closed"
+    And the output should not contain "sto-0002"
+
+  Scenario: List keeps open parents expanded
+    Given a ticket exists with ID "epi-0001" and title "Epic"
+    And a ticket exists with ID "sto-0002" and title "Story"
+    And ticket "sto-0002" depends on "epi-0001"
+    When I run "ticket ls"
+    Then the command should succeed
+    And the output should not contain "▸ epi-0001"
+
+  Scenario: List shows unmatched parent as context under filter
+    Given a ticket exists with ID "epi-0001" and title "Epic"
+    And a ticket exists with ID "tsk-0002" and title "Task"
+    And ticket "tsk-0002" depends on "epi-0001"
+    And ticket "tsk-0002" has status "in_progress"
+    When I run "ticket ls --status=in_progress"
+    Then the command should succeed
+    And the output should contain "(context)"
+    And the output should contain "epi-0001"
+    And the output should contain "in_progress"
+
+  Scenario: List hides unrelated tickets under filter
+    Given a ticket exists with ID "a-0001" and title "Matching task"
+    And a ticket exists with ID "b-0002" and title "Other task"
+    And ticket "a-0001" has status "in_progress"
+    When I run "ticket ls --status=in_progress"
+    Then the command should succeed
+    And the output should not contain "b-0002"
+
+  Scenario: List shows missing dependencies as second line
+    Given a ticket exists with ID "tsk-0001" and title "Task with ghost dep"
+    And ticket "tsk-0001" depends on "gho-9999"
+    When I run "ticket ls"
+    Then the command should succeed
+    And the output should contain "(missing)"
+
+  Scenario: List reports dependency cycles with warning
+    Given a ticket exists with ID "cyc-0005" and title "Cycle A"
+    And a ticket exists with ID "cyc-0006" and title "Cycle B"
+    And ticket "cyc-0005" depends on "cyc-0006"
+    And ticket "cyc-0006" depends on "cyc-0005"
+    When I run "ticket ls"
+    Then the command should succeed
+    And the output should contain "Warning: dependency cycle detected"
+    And the output should contain "⟲"
+
+  Scenario: List renders each multi-parent child once
+    Given a ticket exists with ID "p-0001" and title "Parent one"
+    And a ticket exists with ID "p-0002" and title "Parent two"
+    And a ticket exists with ID "c-0003" and title "Child"
+    And ticket "c-0003" depends on "p-0001"
+    And ticket "c-0003" depends on "p-0002"
+    When I run "ticket ls"
+    Then the command should succeed
+    And the output line count should be 3
+
+  Scenario: Flat format lists one line per ticket
+    Given a ticket exists with ID "epi-0001" and title "Epic"
+    And a ticket exists with ID "sto-0002" and title "Story"
+    And ticket "sto-0002" depends on "epi-0001"
+    When I run "ticket ls --flat"
+    Then the command should succeed
+    And the output line count should be 2
 
   Scenario: List with no tickets returns nothing
     When I run "ticket ls"

@@ -30,10 +30,13 @@ Dependencies: bash, sed, awk, find. Optional: ripgrep (faster grep).
 ```
 plugins/
 ├── README.md              # Plugin conventions documentation
+├── ticket-edit            # Extracted from core
 ├── ticket-query           # Extracted from core (requires jq)
 ├── ticket-migrate-beads   # Extracted from core (requires jq)
 └── ...
 
+cmd/ticket-ls/            # Go plugin binary backing ls/list, ready, blocked
+internal/                 # Go packages: tickets (parser), graph, render
 pkg/
 ├── extras.txt             # Curated list for ticket-extras meta-package
 └── aur/                   # PKGBUILD templates
@@ -71,11 +74,13 @@ For new functionality (not extracted from core):
 
 ## Testing
 
-BDD tests using [Behave](https://behave.readthedocs.io/). Run with `make test` (requires `uv`).
+BDD tests using [Behave](https://behave.readthedocs.io/). Run with `make test` (requires `uv` and Go; builds the Go plugin first, then runs `go vet`, `go test`, and behave).
 
 - Feature files: `features/*.feature` - Gherkin scenarios covering all commands
 - Step definitions: `features/steps/ticket_steps.py`
-- CI runs tests on push to master and all PRs
+- Go unit + golden tests: `internal/*/ *_test.go` (run via `make unit`)
+- Differential harness: `scripts/differential-check.sh` compares Go plugin vs bash built-ins
+- CI runs build + all test layers on push to master and all PRs
 
 When adding new commands or flags, add corresponding scenarios to the appropriate feature file.
 
@@ -145,7 +150,7 @@ Plugins are only published if their `tk-plugin-version` changed (identical PKGBU
 
 ### Package Managers
 
-- **Homebrew:** `wedow/homebrew-tools` tap
+- **Homebrew:** `TylerAngelier/homebrew-tools` tap
 - **AUR:** Individual repos at `aur.archlinux.org/<pkgname>.git`
 
 Both are updated automatically by CI. AUR repos are created on first push if they don't exist.

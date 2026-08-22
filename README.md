@@ -18,7 +18,7 @@ VS Code allows you to Ctrl+Click or Cmd+Click the ID and jump directly to the fi
 
 **Homebrew (macOS/Linux):**
 ```bash
-brew tap wedow/tools
+brew tap TylerAngelier/homebrew-tools https://github.com/TylerAngelier/homebrew-tools
 brew install ticket
 ```
 
@@ -29,7 +29,7 @@ yay -S ticket  # or paru, etc.
 
 **From source (auto-updates on git pull):**
 ```bash
-git clone https://github.com/wedow/ticket.git
+git clone https://github.com/TylerAngelier/ticket.git
 cd ticket && ln -s "$PWD/ticket" ~/.local/bin/tk
 ```
 
@@ -77,7 +77,8 @@ Commands:
   undep <id> <dep-id>      Remove dependency
   link <id> <id> [id...]   Link tickets together (symmetric)
   unlink <id> <target-id>  Remove link between tickets
-  ls|list [--status=X] [-a X] [-T X]   List tickets
+  ls|list [--status=X] [-a X] [-T X] [--flat]
+                           List tickets as a hierarchy tree (see below)
   ready [-a X] [-T X]      List open/in-progress tickets with deps resolved
   blocked [-a X] [-T X]    List open/in-progress tickets with unresolved deps
   closed [--limit=N] [-a X] [-T X] List recently closed tickets (default 20, by mtime)
@@ -93,6 +94,27 @@ Bundled plugins (ticket-extras):
 
 Searches parent directories for .tickets/ (override with TICKETS_DIR env var)
 Supports partial ID matching (e.g., 'tk show 5c4' matches 'nw-5c46')
+```
+
+### Hierarchical list view
+
+`ls`/`list` renders tickets as a tree. A ticket's dependencies are its
+children: an epic depends on its stories, a story on its tasks.
+
+```
+epi-a1b2 [P1][open] Ship the thing
+├── sto-c3d4 [P2][open] Story A
+│   ┆ deps: tsk-9999 ⛔        <- cross-dependency, still open
+├── sto-e5f6 [P2][in_progress] Story B
+│   ┆ deps: gho-1111 (missing) <- references a deleted ticket
+└── ▸ sto-7777 [P2][closed] Done story · 3 closed   <- collapsed subtree
+```
+
+- Fully-closed subtrees collapse to one line (`▸`, dimmed when colors are on)
+- With `-a`/`-T`/`--status` filters, non-matching ancestors appear as
+  `(context)` so children stay in place
+- Dependency cycles render inline with `⟲` and warn on stderr
+- `--flat` prints one `id [Pn][status] title` line per ticket for scripts
 ```
 
 ## Plugins
@@ -131,14 +153,28 @@ echo "Created $id, doing extra stuff..."
 
 Use `tk super <cmd>` to bypass plugins and run the built-in directly.
 
+The `list`/`ls`, `ready`, and `blocked` commands are backed by a compiled Go
+binary (`cmd/ticket-ls`) installed as `ticket-ls`, `ticket-list`,
+`ticket-ready`, and `ticket-blocked`. Build and install with:
+
+```sh
+make install    # builds and symlinks into ~/.local/bin
+```
+
 ## Testing
 
-The tests are written in the Behavior-Driven Development library [behave](https://behave.readthedocs.io/en/latest/) and require Python.
+Tests have two layers:
+
+- **Unit tests** (`go test ./...`): parser, graph, and golden-file renderer tests
+- **BDD tests** ([behave](https://behave.readthedocs.io/en/latest/)): end-to-end
+  scenarios shelling out to the real CLI
 
 If you have `uv` [installed](https://docs.astral.sh/uv/getting-started/installation/) simply:
 
 ```sh
-make test
+make test          # build + unit + behave
+make differential  # byte-compare Go plugin vs bash built-ins on random fixtures
+make bench         # performance regression gate (5k tickets, 2s budget)
 ```
 
 ## Migrating from Beads

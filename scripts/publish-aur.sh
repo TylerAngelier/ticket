@@ -8,6 +8,7 @@ set -euo pipefail
 VERSION="${1#v}"
 SHA256="$2"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SOURCE_REPO="${SOURCE_REPO:-TylerAngelier/ticket}"
 
 # Setup SSH for AUR access
 setup_ssh() {
@@ -125,16 +126,16 @@ generate_plugin_pkgbuild() {
 
     mkdir -p "$output_dir"
     cat > "$output_dir/PKGBUILD" << EOF
-# Maintainer: wedow <wedow@users.noreply.github.com>
+# Maintainer: Tyler Angelier <tylerangelier@gmail.com>
 pkgname=ticket-$plugin_name
 pkgver=$pkgver
 pkgrel=1
 pkgdesc="$pkgdesc"
 arch=('any')
-url="https://github.com/wedow/ticket"
+url="https://${SOURCE_REPO}"
 license=('MIT')
 depends=('ticket-core'${extra_deps:+ $extra_deps})
-source=("ticket-\$pkgver.tar.gz::https://github.com/wedow/ticket/archive/refs/tags/v\$pkgver.tar.gz")
+source=("ticket-\$pkgver.tar.gz::https://${SOURCE_REPO}/archive/refs/tags/v\$pkgver.tar.gz")
 sha256sums=('$SHA256')
 
 package() {
