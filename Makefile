@@ -29,12 +29,15 @@ bench: build
 
 install: build
 	mkdir -p "$(PREFIX)/bin"
+	ln -sf "$(CURDIR)/ticket" "$(PREFIX)/bin/tk"
+	ln -sf "$(CURDIR)/ticket" "$(PREFIX)/bin/ticket"
 	for b in $(BINS); do \
 		ln -sf "$(CURDIR)/$(BIN_DIR)/ticket-ls" "$(PREFIX)/bin/$$b"; \
 	done
-	@echo "Installed tk plugins to $(PREFIX)/bin (ensure it is on your PATH)"
+	@echo "Installed tk + plugins to $(PREFIX)/bin"
 
 uninstall:
+	rm -f "$(PREFIX)/bin/tk" "$(PREFIX)/bin/ticket"
 	for b in $(BINS); do rm -f "$(PREFIX)/bin/$$b"; done
 
 clean:
