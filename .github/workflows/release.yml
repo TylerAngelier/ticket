@@ -50,6 +50,7 @@ jobs:
           ./scripts/publish-homebrew.sh "${{ steps.sha.outputs.version }}" "${{ steps.sha.outputs.sha256 }}"
 
       - name: Update AUR packages
+        continue-on-error: true # AUR packaging rework pending
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |

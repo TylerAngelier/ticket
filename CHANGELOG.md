@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.0] - 2026-08-23
 
 ### Added
 - Hierarchical `ls`/`list` view: tickets render as a tree (parents depend on
