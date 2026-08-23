@@ -1,6 +1,6 @@
 BIN_DIR := build
 PREFIX ?= $(HOME)/.local
-BINS := ticket-ls ticket-list ticket-ready ticket-blocked
+BINS := ticket-ls ticket-list ticket-ready ticket-blocked ticket-dep ticket-closed ticket-show
 
 .PHONY: build test unit behave differential bench install uninstall clean
 

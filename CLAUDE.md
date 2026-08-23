@@ -37,9 +37,7 @@ plugins/
 
 cmd/ticket-ls/            # Go plugin binary backing ls/list, ready, blocked
 internal/                 # Go packages: tickets (parser), graph, render
-pkg/
-├── extras.txt             # Curated list for ticket-extras meta-package
-└── aur/                   # PKGBUILD templates
+pkg/                           # (empty - AUR packaging removed)
 ```
 
 ### Plugin File Conventions
@@ -60,16 +58,14 @@ When moving a command from core to a plugin:
 2. Add metadata comments (`tk-plugin:`, `tk-plugin-version:`)
 3. Remove `cmd_<name>()` from core script
 4. Remove from dispatch case statement
-5. Add `<name>` to `pkg/extras.txt`
-6. Update CHANGELOG.md (see below)
-7. Update README.md usage section
+5. Update CHANGELOG.md (see below)
+6. Update README.md usage section
 
 ### Creating New Plugins
 
 For new functionality (not extracted from core):
 1. Create `plugins/ticket-<name>`
 2. Add metadata comments
-3. Do NOT add to `pkg/extras.txt` (only core extractions go there)
 4. Document in plugins/README.md if it's an official plugin
 
 ## Testing
@@ -116,11 +112,9 @@ Example:
 
 ### Package Structure
 
-Two formulas (Homebrew) built from source:
+Two Homebrew formulas built from source:
 - `ticket` - Full installation: tk, bash plugins, compiled Go plugin (`cmd/ticket-ls`)
 - `ticket-core` - Core script only, no plugins
-
-AUR packaging still uses the older multi-package layout (pending rework).
 
 Users can mix and match:
 ```bash
@@ -144,13 +138,9 @@ brew install ticket-core ticket-query  # Core + specific plugin
 The release workflow (`.github/workflows/release.yml`) automatically:
 1. Creates GitHub release with changelog body
 2. Runs `scripts/publish-homebrew.sh` - updates all formulas in tap
-3. Runs `scripts/publish-aur.sh` - updates all AUR packages
-
 Plugins are only published if their `tk-plugin-version` changed (identical PKGBUILDs result in no-op pushes).
 
 ### Package Managers
 
 - **Homebrew:** `TylerAngelier/homebrew-tools` tap
-- **AUR:** Individual repos at `aur.archlinux.org/<pkgname>.git`
-
-Both are updated automatically by CI. AUR repos are created on first push if they don't exist.
+Homebrew is the only package manager target.

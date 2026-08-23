@@ -69,7 +69,8 @@ class Ticket < Formula
     # Compiled Go plugin backing ls/list/ready/blocked
     system "go", "build", "-trimpath", "-o", "ticket-ls", "./cmd/ticket-ls"
     bin.install "ticket-ls"
-    ["ticket-list", "ticket-ready", "ticket-blocked"].each do |name|
+    ["ticket-list", "ticket-ready", "ticket-blocked",
+     "ticket-dep", "ticket-closed", "ticket-show"].each do |name|
       bin.install_symlink "ticket-ls" => name
     end
 

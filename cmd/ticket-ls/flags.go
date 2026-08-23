@@ -11,7 +11,10 @@ type flags struct {
 	assignee string
 	tag      string
 	flat     bool
+	limit    int
 }
+
+const defaultClosedLimit = 20
 
 func parseFlags(args []string) (f flags, flat bool, rest []string, err error) {
 	for i := 0; i < len(args); i++ {
@@ -19,6 +22,19 @@ func parseFlags(args []string) (f flags, flat bool, rest []string, err error) {
 		switch {
 		case a == "--flat":
 			flat = true
+		case strings.HasPrefix(a, "--limit="):
+			n := 0
+			for _, c := range strings.TrimPrefix(a, "--limit=") {
+				if c < '0' || c > '9' {
+					n = -1
+					break
+				}
+				n = n*10 + int(c-'0')
+			}
+			if n < 0 {
+				return f, flat, rest, fmt.Errorf("invalid --limit value")
+			}
+			f.limit = n
 		case a == "--status=open" || strings.HasPrefix(a, "--status="):
 			f.status = strings.TrimPrefix(a, "--status=")
 		case a == "-a":

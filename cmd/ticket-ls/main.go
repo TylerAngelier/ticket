@@ -9,7 +9,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/TylerAngelier/ticket/internal/graph"
 	"github.com/TylerAngelier/ticket/internal/render"
@@ -55,7 +57,8 @@ func main() {
 }
 
 // defaultCmd derives the command from the invoked name so the same binary
-// can be installed as ticket-ls, ticket-list, ticket-ready, ticket-blocked.
+// can be installed as ticket-ls, ticket-list, ticket-ready, ticket-blocked,
+// ticket-dep, ticket-closed, and ticket-show.
 func defaultCmd() string {
 	base := filepath.Base(os.Args[0])
 	switch base {
@@ -65,6 +68,12 @@ func defaultCmd() string {
 		return "blocked"
 	case "ticket-list", "tk-list":
 		return "list"
+	case "ticket-closed", "tk-closed":
+		return "closed"
+	case "ticket-show", "tk-show":
+		return "show"
+	case "ticket-dep", "tk-dep":
+		return "dep"
 	}
 	return ""
 }
@@ -76,13 +85,40 @@ func run(args []string) int {
 	}
 	if len(args) > 0 {
 		switch args[0] {
-		case "ready", "blocked", "ls", "list":
+		case "ready", "blocked", "ls", "list", "closed", "show", "dep", "tree", "cycle":
+			if args[0] == "tree" || args[0] == "cycle" {
+				// Keep args intact: runDep needs the subcommand.
+				cmd = "dep"
+				break
+			}
+			if cmd == "dep" && args[0] != "dep" {
+				break // invoked as ticket-dep <tree|cycle>: keep args
+			}
 			cmd = args[0]
 			args = args[1:]
 		case "-h", "--help", "help":
 			fmt.Print(usage)
 			return 0
 		}
+	}
+
+	if cmd == "show" {
+		dir := ticketsDir()
+		all, rc := loadTickets(dir)
+		if rc != 0 {
+			return rc
+		}
+		return runShow(all, dir, args)
+	}
+
+	if cmd == "dep" {
+		// Subcommand stays in args; writes are delegated inside runDep.
+		dir := ticketsDir()
+		all, rc := loadTickets(dir)
+		if rc != 0 {
+			return rc
+		}
+		return runDep(all, args)
 	}
 
 	f, flat, rest, err := parseFlags(args)
@@ -99,22 +135,15 @@ func run(args []string) int {
 		return 2
 	}
 
-	dir := os.Getenv("TICKETS_DIR")
-	if dir == "" {
-		// Plugin contract: plugins handle their own TICKETS_DIR discovery.
-		dir = findTicketsDir()
-		if dir == "" {
-			fmt.Fprintln(os.Stderr, "Error: no .tickets directory found (searched parent directories)")
-			fmt.Fprintln(os.Stderr, "Run 'tk create' to initialize, or set TICKETS_DIR env var")
-			return 1
-		}
-	}
-	all, err := tickets.LoadDir(dir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		return 1
+	dir := ticketsDir()
+	all, rc := loadTickets(dir)
+	if rc != 0 {
+		return rc
 	}
 
+	if f.limit == 0 {
+		f.limit = defaultClosedLimit
+	}
 	filt := graph.Filter{Status: f.status, Assignee: f.assignee, Tag: f.tag}
 
 	switch cmd {
@@ -131,8 +160,123 @@ func run(args []string) int {
 		render.Ready(os.Stdout, all, filt)
 	case "blocked":
 		render.Blocked(os.Stdout, all, filt)
+	case "closed":
+		render.Closed(os.Stdout, all, filt, f.limit)
 	}
 	return 0
+}
+
+// runShow implements the show command (positional ID, no flags).
+func runShow(all []tickets.Ticket, dir string, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: ticket show <id>")
+		return 1
+	}
+	g := graph.Build(all)
+	target, err := g.ResolveID(args[0])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if err := render.Show(os.Stdout, dir, target, g); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
+// runDep implements `dep tree`, `dep cycle`; anything else (the add path,
+// a write) is delegated to the bash built-in via $TK_SCRIPT super dep.
+func runDep(all []tickets.Ticket, args []string) int {
+	g := graph.Build(all)
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: ticket dep <id> <dependency-id>")
+		fmt.Fprintln(os.Stderr, "       ticket dep tree [--full] <id>  - show dependency tree")
+		fmt.Fprintln(os.Stderr, "       ticket dep cycle               - find dependency cycles")
+		return 1
+	}
+	switch args[0] {
+	case "tree":
+		rest := args[1:]
+		full := false
+		if len(rest) > 0 && rest[0] == "--full" {
+			full = true
+			rest = rest[1:]
+		}
+		if len(rest) != 1 {
+			fmt.Fprintln(os.Stderr, "Usage: ticket dep tree [--full] <id>")
+			return 1
+		}
+		root, err := g.ResolveID(rest[0])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		for _, line := range g.DepTree(root, full) {
+			fmt.Println(line)
+		}
+		return 0
+	case "cycle":
+		cycles := g.OpenCycles()
+		if len(cycles) == 0 {
+			fmt.Println("No dependency cycles found")
+			return 0
+		}
+		for i, c := range cycles {
+			if i > 0 {
+				fmt.Println()
+			}
+			fmt.Printf("Cycle %d: %s\n", i+1, strings.Join(c.Path, " -> "))
+			for _, m := range c.Members {
+				t := g.Tickets[m]
+				status := t.Status
+				if status == "" {
+					status = "open"
+				}
+				fmt.Printf("  %-8s [%s] %s\n", m, status, t.Title)
+			}
+		}
+		return 0
+	default:
+		// Write operation: delegate to the bash built-in.
+		tkScript := os.Getenv("TK_SCRIPT")
+		if tkScript == "" {
+			fmt.Fprintf(os.Stderr, "Error: TK_SCRIPT not set; cannot delegate 'dep %s'\n", args[0])
+			return 1
+		}
+		cmd := exec.Command(tkScript, append([]string{"super", "dep"}, args...)...)
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				return ee.ExitCode()
+			}
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		return 0
+	}
+}
+
+// ticketsDir resolves the tickets directory per the plugin contract.
+func ticketsDir() string {
+	if d := os.Getenv("TICKETS_DIR"); d != "" {
+		return d
+	}
+	return findTicketsDir()
+}
+
+func loadTickets(dir string) ([]tickets.Ticket, int) {
+	if dir == "" {
+		fmt.Fprintln(os.Stderr, "Error: no .tickets directory found (searched parent directories)")
+		fmt.Fprintln(os.Stderr, "Run 'tk create' to initialize, or set TICKETS_DIR env var")
+		return nil, 1
+	}
+	all, err := tickets.LoadDir(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return nil, 1
+	}
+	return all, 0
 }
 
 // findTicketsDir walks parent directories looking for .tickets,

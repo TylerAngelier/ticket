@@ -16,6 +16,10 @@
 - Performance regression gate (`scripts/bench.sh`)
 - Makefile targets: build, unit, behave, differential, bench, install
 
+### Removed
+- AUR packaging and multi-package Homebrew layout (publish-aur.sh, pkg/aur/,
+  pkg/extras.txt); replaced by two source-build Homebrew formulas
+
 ### Changed
 - Fork URLs repointed from wedow to TylerAngelier (publish scripts, PKGBUILDs,
   README); tap/AUR targets overridable via TAP_REPO and SOURCE_REPO env vars

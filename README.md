@@ -22,11 +22,6 @@ brew install tylerangelier/tap/ticket        # everything (tk + plugins)
 brew install tylerangelier/tap/ticket-core   # just the tk script
 ```
 
-**Arch Linux (AUR):**
-```bash
-yay -S ticket  # or paru, etc.
-```
-
 **From source (auto-updates on git pull):**
 ```bash
 git clone https://github.com/TylerAngelier/ticket.git

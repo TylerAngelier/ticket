@@ -2,6 +2,7 @@ package graph
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/TylerAngelier/ticket/internal/tickets"
@@ -11,7 +12,7 @@ func mk(id, status string, priority int, deps ...string) tickets.Ticket {
 	if status == "" {
 		status = "open"
 	}
-	return tickets.Ticket{ID: id, Status: status, Priority: priority, Deps: deps}
+	return tickets.Ticket{ID: id, Status: status, Priority: priority, Deps: deps, Title: "Title " + id}
 }
 
 func build(ts ...tickets.Ticket) *Graph { return Build(ts) }
@@ -117,5 +118,77 @@ func TestChildrenSortedPriorityThenID(t *testing.T) {
 	want := []string{"m-9", "a-2", "z-1"} // P2 first, then P3 sorted by id
 	if got := g.Children["p-1"]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("children = %v, want %v", got, want)
+	}
+}
+
+func TestDepTreeDirectionAndOrder(t *testing.T) {
+	// a-1 depends on b-1 and c-1; b-1 depends on d-1 (deep).
+	g := build(
+		mk("a-1", "", 1, "b-1", "c-1"),
+		mk("b-1", "", 2, "d-1"),
+		mk("c-1", "", 3),
+		mk("d-1", "", 4),
+	)
+	lines := g.DepTree("a-1", false)
+	want := []string{
+		"a-1 [open] Title a-1",
+		"├── c-1 [open] Title c-1", // shallow branch first (bash subtree-depth sort)
+		"└── b-1 [open] Title b-1",
+		"    └── d-1 [open] Title d-1",
+	}
+	if !reflect.DeepEqual(lines, want) {
+		t.Errorf("got:\n%s\nwant:\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestDepTreeShallowBeforeDeep(t *testing.T) {
+	// Children sorted by subtree depth ascending then ID.
+	g := build(
+		mk("r-1", "", 1, "z-9", "a-9", "m-5"),
+		mk("z-9", "", 2),
+		mk("a-9", "", 2),
+		mk("m-5", "", 2, "deep-1"),
+		mk("deep-1", "", 3),
+	)
+	lines := g.DepTree("r-1", false)
+	var order []string
+	for _, l := range lines[1:] {
+		order = append(order, strings.Fields(strings.TrimLeft(l, "├└─ "))[0])
+	}
+	want := []string{"a-9", "z-9", "m-5", "deep-1"} // shallow leaves first, deep branch last
+	if !reflect.DeepEqual(order, want) {
+		t.Errorf("order = %v, want %v\n%s", order, want, strings.Join(lines, "\n"))
+	}
+}
+
+func TestResolveID(t *testing.T) {
+	g := build(mk("abc-1234", "open", 1), mk("abd-5678", "open", 1))
+	if id, err := g.ResolveID("abc-1234"); err != nil || id != "abc-1234" {
+		t.Errorf("exact: %v %v", id, err)
+	}
+	if id, err := g.ResolveID("1234"); err != nil || id != "abc-1234" {
+		t.Errorf("partial: %v %v", id, err)
+	}
+	if _, err := g.ResolveID("zzzz"); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Errorf("missing: %v", err)
+	}
+	if _, err := g.ResolveID("ab"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Errorf("ambiguous: %v", err)
+	}
+}
+
+func TestOpenCyclesExcludesClosed(t *testing.T) {
+	g := build(
+		mk("a-1", "closed", 1, "b-1"), // closed: cycle invisible to dep cycle
+		mk("b-1", "open", 1, "a-1"),
+		mk("c-1", "open", 1, "d-1"),
+		mk("d-1", "open", 1, "c-1"),
+	)
+	cycles := g.OpenCycles()
+	if len(cycles) != 1 {
+		t.Fatalf("cycles = %d, want 1 (only the open one)", len(cycles))
+	}
+	if cycles[0].Members[0] != "c-1" {
+		t.Errorf("members = %v, want rotation from c-1", cycles[0].Members)
 	}
 }

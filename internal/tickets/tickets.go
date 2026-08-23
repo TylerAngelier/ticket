@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Ticket is a parsed ticket file.
@@ -19,6 +20,9 @@ type Ticket struct {
 	Assignee string
 	Tags     []string
 	Deps     []string
+	Links    []string
+	Parent   string
+	ModTime  time.Time // file mtime, for `closed` ordering
 }
 
 // LoadDir reads every *.md file in dir and returns the parsed tickets,
@@ -38,12 +42,16 @@ func LoadDir(dir string) ([]Ticket, error) {
 
 	var out []Ticket
 	for _, name := range names {
-		t, err := ParseFile(filepath.Join(dir, name))
+		path := filepath.Join(dir, name)
+		t, err := ParseFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
 		}
 		if t.ID == "" {
 			continue // not a ticket file
+		}
+		if fi, statErr := os.Stat(path); statErr == nil {
+			t.ModTime = fi.ModTime()
 		}
 		out = append(out, t)
 	}
@@ -116,6 +124,10 @@ func parseField(t *Ticket, line string) {
 		t.Tags = parseList(val)
 	case "deps":
 		t.Deps = parseList(val)
+	case "links":
+		t.Links = parseList(val)
+	case "parent":
+		t.Parent = val
 	}
 }
 
