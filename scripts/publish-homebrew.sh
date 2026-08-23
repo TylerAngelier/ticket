@@ -104,11 +104,14 @@ main() {
         echo "Error: TAP_GITHUB_TOKEN not set (or use DRY_RUN=1)" >&2
         exit 1
     }
+    # Strip stray whitespace/quotes that can sneak in when pasting the secret
+    local token
+    token="$(printf '%s' "${TAP_GITHUB_TOKEN}" | tr -d '[:space:]"')"
 
     local tap_dir="/tmp/homebrew-tap"
     rm -rf "$tap_dir"
     git clone --depth 1 \
-        "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/${TAP_REPO}.git" \
+        "https://x-access-token:${token}@github.com/${TAP_REPO}.git" \
         "$tap_dir"
 
     generate_formulas "$tap_dir/Formula"
