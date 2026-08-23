@@ -10,6 +10,7 @@
   warning. `--flat` gives one-line-per-ticket output for scripts.
 - Compiled Go plugin binary (`ticket-ls`) backing `list`, `ready`, and
   `blocked` commands; ~230x faster than the awk implementation at 5k tickets
+- `--tk-describe` support: plugin descriptions and version now show in `tk help`
 - Differential test harness (`scripts/differential-check.sh`) comparing Go
   plugin output byte-for-byte against bash built-ins on generated fixtures
 - Performance regression gate (`scripts/bench.sh`)

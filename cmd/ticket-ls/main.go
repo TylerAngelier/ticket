@@ -16,6 +16,9 @@ import (
 	"github.com/TylerAngelier/ticket/internal/tickets"
 )
 
+// version is reported via --tk-describe and used by release tooling.
+const version = "1.0.0"
+
 const usage = `Usage: ticket-ls [command] [options]
 
 Commands:
@@ -32,6 +35,22 @@ Options:
 `
 
 func main() {
+	// Plugin metadata contract: binaries answer --tk-describe without
+	// touching ticket storage.
+	if len(os.Args) > 1 && os.Args[1] == "--tk-describe" {
+		desc := map[string]string{
+			"ticket-ready":   "List tickets whose dependencies are all closed",
+			"ticket-blocked": "List tickets blocked by unclosed dependencies",
+			"tk-ready":       "List tickets whose dependencies are all closed",
+			"tk-blocked":     "List tickets blocked by unclosed dependencies",
+		}[filepath.Base(os.Args[0])]
+		if desc == "" {
+			desc = "List tickets as a hierarchy tree (epics -> stories -> tasks)"
+		}
+		fmt.Printf("tk-plugin: %s\n", desc)
+		fmt.Printf("tk-plugin-version: %s\n", version)
+		return
+	}
 	os.Exit(run(os.Args[1:]))
 }
 
