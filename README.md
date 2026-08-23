@@ -18,8 +18,8 @@ VS Code allows you to Ctrl+Click or Cmd+Click the ID and jump directly to the fi
 
 **Homebrew (macOS/Linux):**
 ```bash
-brew tap TylerAngelier/homebrew-tools https://github.com/TylerAngelier/homebrew-tools
-brew install ticket
+brew install tylerangelier/tap/ticket        # everything (tk + plugins)
+brew install tylerangelier/tap/ticket-core   # just the tk script
 ```
 
 **Arch Linux (AUR):**

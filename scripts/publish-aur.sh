@@ -8,7 +8,7 @@ set -euo pipefail
 VERSION="${1#v}"
 SHA256="$2"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SOURCE_REPO="${SOURCE_REPO:-TylerAngelier/ticket}"
+SOURCE_REPO="${SOURCE_REPO:-github.com/TylerAngelier/ticket}"
 
 # Setup SSH for AUR access
 setup_ssh() {

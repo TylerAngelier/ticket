@@ -116,11 +116,11 @@ Example:
 
 ### Package Structure
 
-Three meta-packages plus individual plugin packages:
-- `ticket` - Full installation (depends on ticket-core + ticket-extras)
+Two formulas (Homebrew) built from source:
+- `ticket` - Full installation: tk, bash plugins, compiled Go plugin (`cmd/ticket-ls`)
 - `ticket-core` - Core script only, no plugins
-- `ticket-extras` - Curated plugins extracted from core (listed in `pkg/extras.txt`)
-- `ticket-<name>` - Individual plugin packages
+
+AUR packaging still uses the older multi-package layout (pending rework).
 
 Users can mix and match:
 ```bash

@@ -1,97 +1,47 @@
 #!/usr/bin/env bash
-# Publish ticket packages to Homebrew tap
-# Usage: ./scripts/publish-homebrew.sh <version> <sha256>
-# Requires: TAP_GITHUB_TOKEN environment variable
+# Publish ticket packages to the Homebrew tap.
+#
+# Usage:
+#   ./scripts/publish-homebrew.sh <version> <sha256>            # clone, update, push
+#   DRY_RUN=1 ./scripts/publish-homebrew.sh <version> <sha256>  # write formulas locally
+#
+# Requires: TAP_GITHUB_TOKEN environment variable (unless DRY_RUN=1)
+#
+# Two-formula layout:
+#   ticket-core  just the `tk` bash script
+#   ticket       everything: tk, bash plugins, and the compiled Go plugin
 
 set -euo pipefail
 
 VERSION="${1#v}"
 SHA256="$2"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TAP_REPO="${TAP_REPO:-TylerAngelier/homebrew-tools}"
-SOURCE_REPO="${SOURCE_REPO:-TylerAngelier/ticket}"
+TAP_REPO="${TAP_REPO:-TylerAngelier/homebrew-tap}"
+SOURCE_REPO="${SOURCE_REPO:-github.com/TylerAngelier/ticket}"
+DRY_RUN="${DRY_RUN:-0}"
 
-# Find symlinks in plugins/ that point to a given plugin, output Homebrew install_symlink lines
-find_plugin_symlinks() {
-    local target="$1"
-    for link in "$REPO_ROOT"/plugins/ticket-*; do
-        [[ -L "$link" ]] || continue
-        local link_target
-        link_target=$(readlink "$link")
-        if [[ "$link_target" == "ticket-$target" ]]; then
-            local alias_name="${link##*/}"
-            printf '\n    bin.install_symlink "ticket-%s" => "%s"' "$target" "$alias_name"
-        fi
-    done
-}
+if [[ -z "$VERSION" || -z "$SHA256" ]]; then
+    echo "Usage: $0 <version> <sha256>" >&2
+    exit 2
+fi
 
-# Parse plugin metadata from script file
-parse_plugin_metadata() {
-    local plugin_file="$1"
-    local version desc
-    version=$(grep -m1 '^# tk-plugin-version:' "$plugin_file" 2>/dev/null | sed 's/^# tk-plugin-version: *//' || echo "")
-    desc=$(grep -m1 '^# tk-plugin:' "$plugin_file" 2>/dev/null | sed 's/^# tk-plugin: *//' || echo "")
-    echo "${version:-$VERSION}|${desc:-No description}"
-}
+# Generate both formulas into a directory.
+generate_formulas() {
+    local out_dir="$1"
+    mkdir -p "$out_dir"
 
-# Generate formula for a plugin
-generate_plugin_formula() {
-    local plugin_name="$1"  # e.g., "query"
-    local plugin_file="$2"
-    local formula_dir="$3"
-
-    local metadata pkgver pkgdesc
-    metadata=$(parse_plugin_metadata "$plugin_file")
-    pkgver="${metadata%%|*}"
-    pkgdesc="${metadata#*|}"
-
-    # Convert plugin name to Ruby class name (ticket-query -> TicketQuery)
-    local class_name="Ticket$(echo "$plugin_name" | sed -r 's/(^|-)(\w)/\U\2/g')"
-
-    cat > "$formula_dir/ticket-$plugin_name.rb" << EOF
-class $class_name < Formula
-  desc "$pkgdesc"
-  homepage "https://${SOURCE_REPO}"
-  url "https://${SOURCE_REPO}/archive/refs/tags/v$pkgver.tar.gz"
-  sha256 "$SHA256"
-  license "MIT"
-
-  depends_on "ticket-core"
-
-  def install
-    bin.install "plugins/ticket-$plugin_name"$(find_plugin_symlinks "$plugin_name")
-  end
-
-  test do
-    assert_match "tk-plugin:", shell_output("head -5 #{bin}/ticket-$plugin_name")
-  end
-end
-EOF
-}
-
-main() {
-    echo "Publishing ticket packages to Homebrew tap (v$VERSION)"
-
-    # Clone tap
-    local tap_dir="/tmp/homebrew-tap"
-    rm -rf "$tap_dir"
-    git clone "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/${TAP_REPO}.git" "$tap_dir"
-
-    local formula_dir="$tap_dir/Formula"
-    mkdir -p "$formula_dir"
-
-    # 1. Update ticket-core formula
-    echo "Updating ticket-core..."
-    cat > "$formula_dir/ticket-core.rb" << EOF
+    # --- ticket-core: the bash script alone -------------------------------
+    cat > "$out_dir/ticket-core.rb" << EOF
 class TicketCore < Formula
   desc "Minimal ticket tracking in bash (core only)"
   homepage "https://${SOURCE_REPO}"
-  url "https://${SOURCE_REPO}/archive/refs/tags/v$VERSION.tar.gz"
-  sha256 "$SHA256"
+  url "https://${SOURCE_REPO}/archive/refs/tags/v${VERSION}.tar.gz"
+  sha256 "${SHA256}"
   license "MIT"
 
   def install
     bin.install "ticket" => "tk"
+    bin.install_symlink "tk" => "ticket"
   end
 
   test do
@@ -100,66 +50,69 @@ class TicketCore < Formula
 end
 EOF
 
-    # 2. Generate plugin formulas (all plugins in plugins/ directory, skip symlinks)
-    if [[ -d "$REPO_ROOT/plugins" ]]; then
-        for plugin_file in "$REPO_ROOT"/plugins/ticket-*; do
-            [[ -f "$plugin_file" && ! -L "$plugin_file" ]] || continue
-            local plugin_name="${plugin_file##*/ticket-}"
-            echo "Generating formula for ticket-$plugin_name..."
-            generate_plugin_formula "$plugin_name" "$plugin_file" "$formula_dir"
-        done
-    fi
-
-    # 3. Update ticket-extras formula with curated plugin list
-    echo "Updating ticket-extras..."
-    local deps_ruby=""
-    if [[ -f "$REPO_ROOT/pkg/extras.txt" ]]; then
-        while IFS= read -r line; do
-            [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-            deps_ruby+="  depends_on \"ticket-$line\""$'\n'
-        done < "$REPO_ROOT/pkg/extras.txt"
-    fi
-    cat > "$formula_dir/ticket-extras.rb" << EOF
-class TicketExtras < Formula
-  desc "All official plugins for ticket"
-  homepage "https://${SOURCE_REPO}"
-  url "https://${SOURCE_REPO}/archive/refs/tags/v$VERSION.tar.gz"
-  sha256 "$SHA256"
-  license "MIT"
-
-$deps_ruby
-  def install
-    # Meta-formula - plugins installed via dependencies
-    (prefix/"README").write "This is a meta-formula that installs all ticket plugins."
-  end
-end
-EOF
-
-    # 4. Update ticket formula (full installation)
-    echo "Updating ticket..."
-    cat > "$formula_dir/ticket.rb" << EOF
+    # --- ticket: core + bash plugins + compiled Go plugin -----------------
+    cat > "$out_dir/ticket.rb" << EOF
 class Ticket < Formula
-  desc "Minimal ticket tracking in bash"
+  desc "Minimal ticket tracking with hierarchical list view"
   homepage "https://${SOURCE_REPO}"
-  url "https://${SOURCE_REPO}/archive/refs/tags/v$VERSION.tar.gz"
-  sha256 "$SHA256"
+  url "https://${SOURCE_REPO}/archive/refs/tags/v${VERSION}.tar.gz"
+  sha256 "${SHA256}"
   license "MIT"
 
-  depends_on "ticket-core"
-  depends_on "ticket-extras"
+  depends_on "go" => :build
 
   def install
-    # Meta-formula - everything installed via dependencies
-    (prefix/"README").write "Full ticket installation with all plugins."
+    # Core CLI + alias
+    bin.install "ticket" => "tk"
+    bin.install_symlink "tk" => "ticket"
+
+    # Compiled Go plugin backing ls/list/ready/blocked
+    system "go", "build", "-trimpath", "-o", "ticket-ls", "./cmd/ticket-ls"
+    bin.install "ticket-ls"
+    ["ticket-list", "ticket-ready", "ticket-blocked"].each do |name|
+      bin.install_symlink "ticket-ls" => name
+    end
+
+    # Bash plugins (regular files only; symlinks were release-time aliases)
+    Dir["plugins/ticket-*"].each do |plugin|
+      bin.install plugin unless File.symlink?(plugin)
+    end
   end
 
   test do
-    system "tk", "help"
+    system "#{bin}/tk", "help"
+    assert_match "tk-plugin-version:",
+                 shell_output("#{bin}/ticket-ls --tk-describe")
   end
 end
 EOF
+}
 
-    # Commit and push
+main() {
+    echo "Homebrew publish (v${VERSION}, tap ${TAP_REPO})"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        local out="/tmp/tap-dryrun"
+        rm -rf "$out"
+        generate_formulas "$out/Formula"
+        echo "DRY RUN: formulas written to ${out}/Formula (nothing pushed)"
+        ls -la "$out/Formula"
+        exit 0
+    fi
+
+    [[ -n "${TAP_GITHUB_TOKEN:-}" ]] || {
+        echo "Error: TAP_GITHUB_TOKEN not set (or use DRY_RUN=1)" >&2
+        exit 1
+    }
+
+    local tap_dir="/tmp/homebrew-tap"
+    rm -rf "$tap_dir"
+    git clone --depth 1 \
+        "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/${TAP_REPO}.git" \
+        "$tap_dir"
+
+    generate_formulas "$tap_dir/Formula"
+
     cd "$tap_dir"
     git config user.name "github-actions[bot]"
     git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -170,10 +123,10 @@ EOF
         exit 0
     fi
 
-    git commit -m "ticket v$VERSION"
+    git commit -m "ticket v${VERSION}"
     git push
 
-    echo "All formulas published successfully!"
+    echo "Formulas published to ${TAP_REPO}"
 }
 
 main "$@"

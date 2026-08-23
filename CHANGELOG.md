@@ -27,6 +27,10 @@
 - `TICKETS_DIR` and `TK_SCRIPT` environment variables exported for plugins
 - `help` command lists installed plugins with descriptions
 - Plugin metadata: `# tk-plugin:` comment for scripts, `--tk-describe` flag for binaries
+- Homebrew publishing collapsed to two source-build formulas (`ticket`,
+  `ticket-core`); publish script rewritten with DRY_RUN mode; tap is
+  `TylerAngelier/homebrew-tap`. Verified end-to-end via local formula install.
+- AUR packaging of the Go binary is deferred:
 - Packaging of the Go binary is deferred: `pkg/extras.txt` still lists `ls`,
   and Homebrew/AUR formulas need updating to build `cmd/ticket-ls` from source
   (tracked for the follow-up packaging pass)
